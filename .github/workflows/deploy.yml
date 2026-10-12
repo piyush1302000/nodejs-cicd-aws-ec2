@@ -1,0 +1,105 @@
+name: CI/CD - Node.js app to EC2
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (if a lint script exists)
+        run: npm run lint --if-present
+
+      - name: Run tests
+        run: npm test
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      id-token: write   # lets the job request an OIDC token for AWS
+      contents: read
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      S3_BUCKET: ${{ vars.S3_BUCKET }}
+      INSTANCE_ID: ${{ vars.EC2_INSTANCE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install production dependencies
+        run: npm ci --omit=dev
+
+      - name: Package release
+        run: tar --exclude=.git --exclude=.github -czf "/tmp/app-${GITHUB_SHA}.tar.gz" .
+
+      - name: Configure AWS credentials (OIDC, no stored keys)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload release to S3
+        run: aws s3 cp "/tmp/app-${GITHUB_SHA}.tar.gz" "s3://${S3_BUCKET}/releases/app-${GITHUB_SHA}.tar.gz"
+
+      - name: Deploy to EC2 through Systems Manager
+        run: |
+          # Commands that SSM will run on the instance (values contain no JSON-special characters)
+          PARAMS=$(cat <<JSON
+          {"commands": [
+            "set -e",
+            "aws s3 cp s3://${S3_BUCKET}/releases/app-${GITHUB_SHA}.tar.gz /tmp/app-${GITHUB_SHA}.tar.gz --region ${AWS_REGION}",
+            "mkdir -p /opt/app/releases/${GITHUB_SHA}",
+            "tar -xzf /tmp/app-${GITHUB_SHA}.tar.gz -C /opt/app/releases/${GITHUB_SHA}",
+            "bash /opt/app/releases/${GITHUB_SHA}/deploy/remote-deploy.sh ${GITHUB_SHA}"
+          ]}
+          JSON
+          )
+
+          CMD_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --comment "Deploy ${GITHUB_SHA::7}" \
+            --parameters "$PARAMS" \
+            --query "Command.CommandId" \
+            --output text)
+          echo "SSM command id: $CMD_ID"
+          sleep 5
+
+          # Wait for the remote script to finish, but always print its output
+          set +e
+          aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID"
+          WAIT_RC=$?
+          set -e
+
+          echo "---- Remote output ----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query "StandardOutputContent" --output text
+          echo "---- Remote errors ----"
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query "StandardErrorContent" --output text
+          exit $WAIT_RC
