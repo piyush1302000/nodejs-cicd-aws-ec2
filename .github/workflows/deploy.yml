@@ -58,14 +58,6 @@ jobs:
 
       - name: Package release
         run: tar --exclude=.git --exclude=.github -czf "/tmp/app-${GITHUB_SHA}.tar.gz" .
-
-      - name: List release contents (debug)
-        run: |
-          pwd
-          ls -la
-          ls -la deploy || echo "no deploy folder here"
-          tar -tzf "/tmp/app-${GITHUB_SHA}.tar.gz" | head -40
-
       
       - name: Configure AWS credentials (OIDC, no stored keys)
         uses: aws-actions/configure-aws-credentials@v6
