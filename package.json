@@ -1,0 +1,14 @@
+{
+  "name": "nodejs-cicd-aws-ec2",
+  "version": "1.0.0",
+  "description": "Small Node.js app used to practise CI/CD with GitHub Actions and AWS EC2",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
