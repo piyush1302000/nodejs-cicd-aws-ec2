@@ -2,7 +2,7 @@ const http = require('node:http');
 const pkg = require('./package.json');
 
 // Edit this line to make a visible change for a deployment demo.
-const GREETING = 'Hello from my Node.js app, deployed by GitHub Actions. This is a change to demonstrate a deployment.';
+const GREETING = 'Hello from my Node.js app, deployed by GitHub Actions. This is Incident 4 in the lab: change this greeting to make the test fail.';
 
 // Incident 1 in the lab: change 'ok' to 'broken' to make the test fail.
 const HEALTH_RESPONSE = { status: 'ok' };
