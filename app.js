@@ -5,7 +5,7 @@ const pkg = require('./package.json');
 const GREETING = 'Hello from my Node.js app, deployed by GitHub Actions. This is a change to demonstrate a deployment.';
 
 // Incident 1 in the lab: change 'ok' to 'broken' to make the test fail.
-const HEALTH_RESPONSE = { status: 'broken' };
+const HEALTH_RESPONSE = { status: 'ok' };
 
 function sendJson(res, statusCode, body) {
   res.writeHead(statusCode, { 'Content-Type': 'application/json' });
