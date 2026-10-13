@@ -68,6 +68,19 @@ jobs:
       - name: Upload release to S3
         run: aws s3 cp "/tmp/app-${GITHUB_SHA}.tar.gz" "s3://${S3_BUCKET}/releases/app-${GITHUB_SHA}.tar.gz"
 
+      - name: Smoke test the public endpoint
+        run: |
+             for attempt in $(seq 1 10); do
+               if curl -fsS --max-time 5 "${{ vars.APP_URL }}/health"; then
+                 echo
+                 echo "Smoke test passed"
+                 exit 0
+               fi
+               sleep 5
+             done
+             echo "Smoke test FAILED: ${{ vars.APP_URL }} is not reachable from outside AWS"
+             exit 1
+
       - name: Deploy to EC2 through Systems Manager
         run: |
           # Commands that SSM will run on the instance (values contain no JSON-special characters)
