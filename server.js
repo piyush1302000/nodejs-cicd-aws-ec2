@@ -1,3 +1,4 @@
+throw new Error('simulated startup crash');
 const createApp = require('./app');
 
 const port = process.env.PORT || 3000;
